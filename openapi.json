@@ -1,0 +1,598 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Autonomous Code Review & Refactoring Agent",
+    "description": "Stateful, human-in-the-loop code review and refactoring service powered by LangGraph, sandboxed flake8/black linting, GitHub Webhooks, and automated Git commits.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/webhooks/github": {
+      "post": {
+        "tags": [
+          "Code Review"
+        ],
+        "summary": "GitHub Webhook Ingestion Endpoint",
+        "description": "Receives PR event payloads from GitHub, extracts repository parameters, and triggers a new LangGraph review thread execution.",
+        "operationId": "github_webhook_endpoint_api_webhooks_github_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitHubWebhookPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/{thread_id}/approve": {
+      "post": {
+        "tags": [
+          "Code Review"
+        ],
+        "summary": "Review Approval & Feedback Decision Endpoint",
+        "description": "Accepts approval payloads (containing approved: true/false and optional feedback: str) to update checkpointer state and resume the review thread.",
+        "operationId": "review_approval_endpoint_api_reviews__thread_id__approve_post",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Thread Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewApprovalResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/{thread_id}/state": {
+      "get": {
+        "tags": [
+          "Code Review"
+        ],
+        "summary": "Get Review Thread State Snapshot",
+        "description": "Retrieve the current checkpoint state, values, next nodes, and audit history.",
+        "operationId": "get_review_state_endpoint_api_reviews__thread_id__state_get",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Thread Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewThreadStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "description": "Health status and configuration inspection endpoint.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GitHubWebhookPayload": {
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action",
+            "default": "opened"
+          },
+          "pull_request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PullRequestNested"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RepositoryNested"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pr_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pr Url"
+          },
+          "repository_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Url"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          }
+        },
+        "type": "object",
+        "title": "GitHubWebhookPayload",
+        "description": "Webhook payload schema for incoming GitHub pull request events.\n\nAccepts both official GitHub webhook payloads and simplified test payloads."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PullRequestNested": {
+        "properties": {
+          "html_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Url"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          },
+          "head": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base"
+          }
+        },
+        "type": "object",
+        "title": "PullRequestNested",
+        "description": "GitHub Pull Request nested object."
+      },
+      "RepositoryNested": {
+        "properties": {
+          "html_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Url"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          }
+        },
+        "type": "object",
+        "title": "RepositoryNested",
+        "description": "GitHub Repository nested object."
+      },
+      "ReviewApprovalRequest": {
+        "properties": {
+          "approved": {
+            "type": "boolean",
+            "title": "Approved",
+            "description": "True to approve commit, False to reject with feedback."
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback",
+            "description": "Optional reviewer feedback directive."
+          }
+        },
+        "type": "object",
+        "required": [
+          "approved"
+        ],
+        "title": "ReviewApprovalRequest",
+        "description": "Payload schema for human approval or rejection with feedback."
+      },
+      "ReviewApprovalResponse": {
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Step"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "refactored_code": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refactored Code"
+          },
+          "commit_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "thread_id",
+          "approved",
+          "status",
+          "message"
+        ],
+        "title": "ReviewApprovalResponse",
+        "description": "Response returned after processing human reviewer feedback or approval."
+      },
+      "ReviewThreadStateResponse": {
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id"
+          },
+          "pr_url": {
+            "type": "string",
+            "title": "Pr Url"
+          },
+          "next_nodes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Next Nodes"
+          },
+          "is_approved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Approved"
+          },
+          "reviewer_feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Feedback"
+          },
+          "lint_errors": {
+            "type": "string",
+            "title": "Lint Errors"
+          },
+          "refactored_files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Refactored Files"
+          },
+          "history": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "thread_id",
+          "pr_url",
+          "next_nodes",
+          "is_approved",
+          "reviewer_feedback",
+          "lint_errors",
+          "refactored_files",
+          "history"
+        ],
+        "title": "ReviewThreadStateResponse",
+        "description": "Response returning full state and audit history for an active review thread."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WebhookResponse": {
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "title": "Thread Id"
+          },
+          "pr_url": {
+            "type": "string",
+            "title": "Pr Url"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Step"
+          },
+          "lint_errors_found": {
+            "type": "boolean",
+            "title": "Lint Errors Found"
+          },
+          "refactored_files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Refactored Files"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "thread_id",
+          "pr_url",
+          "status",
+          "lint_errors_found",
+          "refactored_files",
+          "message"
+        ],
+        "title": "WebhookResponse",
+        "description": "Response returned upon receiving and initiating PR review pipeline."
+      }
+    }
+  }
+}
