@@ -40,6 +40,27 @@ app.add_middleware(
 app.include_router(api_router)
 
 
+@app.get("/", tags=["Root"])
+async def root():
+    """Welcome endpoint providing service overview and documentation links."""
+    return {
+        "service": "Autonomous Code Review & Refactoring Agent",
+        "version": "1.0.0",
+        "status": "running",
+        "documentation": {
+            "swagger_ui": "/docs",
+            "redoc": "/redoc",
+            "openapi_json": "/openapi.json",
+        },
+        "endpoints": {
+            "health_check": "/health",
+            "github_webhook": "POST /api/webhooks/github",
+            "review_approval": "POST /api/reviews/{thread_id}/approve",
+            "thread_state": "GET /api/reviews/{thread_id}/state",
+        },
+    }
+
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health status and configuration inspection endpoint."""
